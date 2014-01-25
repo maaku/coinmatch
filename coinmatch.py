@@ -167,10 +167,8 @@ for org_id in early_orgs:
         route[sk.bitcoin_address()] = \
               wallet.subkey_for_path('0/%d' % org_id).bitcoin_address()
 
-# ===----------------------------------------------------------------------===
-
-forward_outputs = filter(lambda o:o.address in route.keys(), outputs)
-outputs = filter(lambda o:o not in foward_outputs, forward_outputs)
+route_outputs = filter(lambda o:o.address in route.keys(), outputs)
+outputs = filter(lambda o:o not in route_outputs, outputs)
 
 # ===----------------------------------------------------------------------===
 
@@ -196,6 +194,9 @@ for r in res:
         rpc.importprivkey(sk.wif())
         print 'Added matching address %s for org %d' % (sk.bitcoin_address(), r.id)
     match[sk.bitcoin_address()] = r.address
+
+match_outputs = filter(lambda o:o.address in match.keys(), outputs)
+outputs = filter(lambda o:o not in match_outputs, outputs)
 
 # ===----------------------------------------------------------------------===
 
