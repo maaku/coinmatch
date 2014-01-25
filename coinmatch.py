@@ -131,13 +131,15 @@ assert rpc.getinfo()
 # ===----------------------------------------------------------------------===
 
 from recordtype import recordtype
-Output = recordtype('Output', ('address', 'amount', 'hash', 'index', 'age'))
+Output = recordtype('Output', ('address', 'amount', 'hash', 'index', 'value', 'age'))
 outputs = map(
     lambda o:Output(**{
         'address': o[u'address'],
-        'amount':  mpq(o[u'amount']),
+        'value':   o[u'amount'],
         'hash':    hash_string_to_integer(o[u'txid']),
         'index':   int(o[u'vout']),
+        'amount':  rpc.decoderawtransaction(rpc.getrawtransaction(o[u'txid'])
+                   )['vout'][o[u'vout']]['value'],
         'age':     int(o[u'confirmations']),
     }),
     rpc.listunspent(),)
