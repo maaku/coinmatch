@@ -73,6 +73,16 @@ gflags.DEFINE_boolean('debug', False,
 gflags.DEFINE_string('foundation_database', u"sqlite:///foundation.sqlite",
     u"Connection string for Freicoin Foundation database")
 
+gflags.DEFINE_string('fee', u"0.0001",
+    u"Minimum relay fee, per kB")
+def _validate_fee(fee):
+    try:
+        mpd(fee); return True
+    except:
+        return False
+gflags.RegisterValidator('fee', _validate_fee,
+    message=u"Must provide a decimal fee value.")
+
 #gflags.DEFINE_string('cache_database', u"sqlite:///coinmatch.sqlite",
 #    u"Connection string for cache database")
 
