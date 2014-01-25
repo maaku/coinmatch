@@ -6,6 +6,9 @@ cdecimal==2.3
 ecdsa==0.10
 gmpy2==2.0.3
 isodate==0.4.9
+lookahead==1.0
+psycopg2==2.5.2
+pycoin==0.25
 python-bitcoin==0.0.9
 python-gflags==2.0
 recordtype==1.1

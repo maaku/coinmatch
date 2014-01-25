@@ -4,186 +4,20 @@
 # Distributed under the MIT/X11 software license, see the accompanying
 # file LICENSE or http://www.opensource.org/licenses/mit-license.php.
 
-from base64 import standard_b64encode, standard_b64decode
-import calendar
-from datetime import datetime, timedelta
-import numbers
-import operator
-import six
-import sys
+if __name__ != '__main__':
+    raise ImportError(u"%s may only be run as a script" % __file__)
 
 # ===----------------------------------------------------------------------===
 
-from bitcoin.address import *
-from bitcoin.crypto import *
-from bitcoin.base58 import *
-from bitcoin.mixins import *
-from bitcoin.script import *
+import six
+
+from bitcoin.numeric import *
 from bitcoin.serialize import *
 from bitcoin.tools import *
 
-# ===----------------------------------------------------------------------===
-
-# SQLAlchemy object-relational mapper
-from sqlalchemy import *
+from pycoin.wallet import Wallet
 
 # ===----------------------------------------------------------------------===
-
-# SQLAlchemy types. These are custom types used to store bitcoin data and
-# CoinJoin cryptographic primitives, performing proper serialization to
-# underlying database types as necessary.
-
-from sa_bitcoin.fields.binary import *
-from sa_bitcoin.fields.ecdsa_ import *
-from sa_bitcoin.fields.hash_ import *
-from sa_bitcoin.fields.integer import *
-from sa_bitcoin.fields.script import *
-from sa_bitcoin.fields.time_ import *
-
-class RsaKey(TypeDecorator):
-    impl = LargeBinary
-
-    def __init__(self, length=None, *args, **kwargs):
-        super(RsaKey, self).__init__(length, *args, **kwargs)
-
-    def process_bind_param(self, value, dialect):
-        return value.exportKey('DER')
-    def process_result_value(self, value, dialect):
-        return RSA.importKey(value)
-    def copy(self):
-        return self.__class__(self.impl.length)
-
-# ===----------------------------------------------------------------------===
-
-# SQLAlchemy ORM event registration
-from sqlalchemy import event, orm
-
-@event.listens_for(orm.Session, 'before_flush')
-def lazy_defaults(session, flush_context, instances):
-    "Sets default values that are left unspecified by the application."
-    for target in session.new.union(session.dirty):
-        if hasattr(target, '__lazy_slots__'):
-            # This code may look like it does nothing, but in fact we are using
-            # properties to lazily generate values for some columns, so calling
-            # `getattr()` evaluates those lazy expressions. This is slightly
-            # kludgy.. but necessary as SQLAlchemy never calls `getattr()` before
-            # passing the field values to the database layer.
-            for attr in target.__lazy_slots__:
-                getattr(target, attr)
-
-# ===----------------------------------------------------------------------===
-
-engine = create_engine('sqlite:///coinmatch.sqlite', echo=False)
-
-Base.metadata.create_all(engine)
-
-from sqlalchemy.orm import sessionmaker
-Session = sessionmaker(bind=engine)
-
-# ===----------------------------------------------------------------------===
-
-def hash_string_to_integer(string, size=32):
-    return deserialize_hash(StringIO(string.decode('hex')[::-1]), size)
-
-def hash_integer_to_string(integer, size=32):
-    return serialize_hash(integer, size)[::-1].encode('hex')
-
-def amount_decimal_to_int64(decimal):
-    return int(decimal * 10**8)
-
-def script_from_hex_string(string):
-    return Script.deserialize(StringIO(serialize_varchar(string.decode('hex'))))
-
-# ===----------------------------------------------------------------------===
-
-def get_chain_id(rpc):
-    # FIXME: Now that asset tags are hash256, simply process the result of
-    #   rpc.getblockhash(0) and return that.
-    genesis_block_hash_string = rpc.getblockhash(0)
-    genesis_block_dict = rpc.getblock(genesis_block_hash_string)
-    genesis_block = core.Block(
-        version     = genesis_block_dict['version'],
-        parent_hash = 0,
-        merkle_hash = hash_string_to_integer(genesis_block_dict['merkleroot']),
-        time        = genesis_block_dict['time'],
-        bits        = int(u'0x' + genesis_block_dict['bits'], base=16),
-        nonce       = genesis_block_dict['nonce'])
-    assert (hash256(genesis_block.serialize()).intdigest() ==
-            hash_string_to_integer(genesis_block_hash_string))
-    return hash256(genesis_block.serialize()).intdigest()
-
-# ===----------------------------------------------------------------------===
-
-from collections import namedtuple
-OutPoint = namedtuple('OutPoint', ('hash', 'index'))
-Contract = namedtuple('Contract', ('amount', 'script'))
-
-def sync_unspent_outputs(rpc, session):
-    asset = get_chain_id(rpc)
-
-    unspent_outputs = dict()
-    result = rpc.listunspent()
-    for obj in result:
-        outpoint = OutPoint(
-            hash  = hash_string_to_integer(obj['txid']),
-            index = obj['vout'])
-        contract = Contract(
-            amount = amount_decimal_to_int64(obj['amount']),
-            script = script_from_hex_string(obj['scriptPubKey']))
-        unspent_outputs[outpoint] = contract
-
-    num_insert = 0
-    num_update = 0
-    num_delete = 0
-
-    for outpoint,contract in six.iteritems(unspent_outputs):
-        output = (session.query(Output)
-                         .filter((Output.hash  == outpoint.hash) &
-                                 (Output.index == outpoint.index))
-                         .first())
-
-        if output is not None:
-            assert output.amount   == contract.amount
-            assert output.contract == contract.script
-            if output.is_mine is True and output.is_spent is False:
-                continue
-            print 'Update %064x:%d' % (outpoint.hash, outpoint.index)
-            output.is_mine  = True
-            output.is_spent = False
-            num_update += 1
-
-        else:
-            print 'Insert %064x:%d' % (outpoint.hash, outpoint.index)
-            output = Output(
-                asset    = asset,
-                hash     = outpoint.hash,
-                index    = outpoint.index,
-                amount   = contract.amount,
-                contract = contract.script,
-                is_mine  = True,
-                is_spent = False)
-            num_insert += 1
-
-        session.add(output)
-    session.flush()
-
-    outputs = (session.query(Output)
-                      .filter((Output.is_mine  == True) &
-                              (Output.is_spent == False)))
-    if outputs.count() != len(unspent_outputs):
-        for output in outputs.all():
-            outpoint = OutPoint(hash=output.hash, index=output.index)
-            if outpoint not in unspent_outputs:
-                print 'Delete %064x:%d' % (outpoint.hash, outpoint.index)
-                output.is_spent = True
-                num_delete += 1
-                session.add(output)
-
-    session.commit()
-
-    print 'Added % 5d previously unknown outputs' % num_insert
-    print 'Reorg\'d % 3d spent outputs as unspent'  % num_update
-    print 'Marked % 4d existing outputs as spent' % num_delete
 
 import gflags
 FLAGS = gflags.FLAGS
@@ -226,33 +60,132 @@ gflags.RegisterValidator('timeout',
 gflags.DEFINE_boolean('testnet', False,
     u"Change bitcoin addresses to use testnet prefixes.")
 
-if __name__ == '__main__':
-    try:
-        argv = FLAGS(sys.argv)
-    except gflags.FlagsError, e:
-        print '%s\n\nUsage %s ARGS \n%s' % (e, sys.argv[0], FLAGS)
-        sys.exit(1)
+gflags.DEFINE_string('rootkey', None,
+    u"BIP-32 root derivation key.")
+gflags.RegisterValidator('rootkey',
+    lambda rootkey: rootkey is not None and Wallet.from_wallet_key(rootkey).is_private,
+    message=u"Must provide private root derivation key.")
+gflags.MarkFlagAsRequired('rootkey')
 
-    if FLAGS.testnet:
-        class BitcoinTestnetAddress(BitcoinAddress):
-            PUBKEY_HASH = 111
-            SCRIPT_HASH = 196
-        BitcoinAddress = BitcoinTestnetAddress
+gflags.DEFINE_boolean('debug', False,
+    u"Print extra debugging information to stderr")
 
-    else:
-        print '%s is NOT ready for primetime; run with --testnet' % sys.argv[0]
-        sys.exit(0)
+gflags.DEFINE_string('foundation_database', u"sqlite:///foundation.sqlite",
+    u"Connection string for Freicoin Foundation database")
 
-    kwargs = {}
-    kwargs['username'] = FLAGS.username
-    kwargs['password'] = FLAGS.password
-    kwargs['timeout'] = FLAGS.timeout
-    from bitcoin.rpc import Proxy
-    rpc = Proxy('http://%s:%d/' % (FLAGS.host, FLAGS.port), **kwargs)
+#gflags.DEFINE_string('cache_database', u"sqlite:///coinmatch.sqlite",
+#    u"Connection string for cache database")
 
-    session = Session()
+# ===----------------------------------------------------------------------===
 
-    sync_unspent_outputs(rpc, session)
+def hash_string_to_integer(string, size=32):
+    return deserialize_hash(StringIO(string.decode('hex')[::-1]), size)
 
-    import IPython
-    IPython.embed()
+def hash_integer_to_string(integer, size=32):
+    return serialize_hash(integer, size)[::-1].encode('hex')
+
+def amount_decimal_to_int64(decimal):
+    return int(decimal * 10**8)
+
+def script_from_hex_string(string):
+    return Script.deserialize(StringIO(serialize_varchar(string.decode('hex'))))
+
+# ===----------------------------------------------------------------------===
+
+try:
+    import sys
+    argv = FLAGS(sys.argv)
+except gflags.FlagsError, e:
+    print '%s\n\nUsage %s ARGS \n%s' % (e, sys.argv[0], FLAGS)
+    sys.exit(1)
+
+if FLAGS.testnet:
+    import bitcoin.address
+    bitcoin.address.BitcoinAddress.PUBKEY_HASH = 111
+    bitcoin.address.BitcoinAddress.SCRIPT_HASH = 196
+
+else:
+    print '%s is NOT ready for primetime; run with --testnet' % sys.argv[0]
+    sys.exit(0)
+
+# ===----------------------------------------------------------------------===
+
+kwargs = {}
+kwargs['username'] = FLAGS.username
+kwargs['password'] = FLAGS.password
+kwargs['timeout'] = FLAGS.timeout
+from bitcoin.rpc import Proxy
+rpc = Proxy('http://%s:%d/' % (FLAGS.host, FLAGS.port), **kwargs)
+assert rpc.getinfo()
+
+# ===----------------------------------------------------------------------===
+
+from recordtype import recordtype
+Output = recordtype('Output', ('address', 'amount', 'hash', 'index', 'age'))
+outputs = map(
+    lambda o:Output(**{
+        'address': o[u'address'],
+        'amount':  mpq(o[u'amount']),
+        'hash':    hash_string_to_integer(o[u'txid']),
+        'index':   int(o[u'vout']),
+        'age':     int(o[u'confirmations']),
+    }),
+    rpc.listunspent(),)
+outputs.sort(key=lambda o:o.age, reverse=True)
+
+# ===----------------------------------------------------------------------===
+
+wallet = Wallet.from_wallet_key(FLAGS.rootkey)
+assert wallet.is_private
+
+# ===----------------------------------------------------------------------===
+
+months = [1, 2, 3, 4]
+early_orgs = [13, 14, 15, 16, 17, 19, 20, 21, 22, 23, 24, 25, 26, 27]
+
+route = {}
+for org_id in early_orgs:
+    for month_id in months:
+        sk = wallet.subkey_for_path('%d/%d' % (month_id, org_id))
+        vk = rpc.validateaddress(sk.bitcoin_address())
+        if not ('ismine' in vk and vk['ismine'] is True):
+            rpc.importprivkey(sk.wif())
+            print 'Added forwarding address %s for org %d, month %d' % (
+                sk.bitcoin_address(), org_id, month_id)
+        route[sk.bitcoin_address()] = \
+              wallet.subkey_for_path('0/%d' % org_id).bitcoin_address()
+
+# ===----------------------------------------------------------------------===
+
+forward_outputs = filter(lambda o:o.address in route.keys(), outputs)
+outputs = filter(lambda o:o not in foward_outputs, forward_outputs)
+
+# ===----------------------------------------------------------------------===
+
+# SQLAlchemy object-relational mapper
+from sqlalchemy import *
+
+engine = create_engine(FLAGS.foundation_database, echo=FLAGS.debug)
+
+res = engine.execute('''
+    SELECT A.id      as id,
+           B.address as address
+    FROM   donations_organization   as A,
+           donations_paymentaddress as B
+    WHERE  A.freicoin_address_id = B.id and
+           A.validated IS NOT NULL
+''')
+
+match = {}
+for r in res:
+    sk = wallet.subkey_for_path('0/%d' % r.id)
+    vk = rpc.validateaddress(sk.bitcoin_address())
+    if not ('ismine' in vk and vk['ismine'] is True):
+        rpc.importprivkey(sk.wif())
+        print 'Added matching address %s for org %d' % (sk.bitcoin_address(), r.id)
+    match[sk.bitcoin_address()] = r.address
+
+# ===----------------------------------------------------------------------===
+
+import IPython
+IPython.embed()
