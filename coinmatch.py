@@ -204,5 +204,37 @@ outputs = filter(lambda o:o not in match_outputs, outputs)
 
 # ===----------------------------------------------------------------------===
 
+def submit_transaction(transaction):
+    # Add fee to transaction
+    # Remove outputs
+    # signed_transaction = signrawtransaction transaction
+    # sendrawtransaction signed_transaction
+    # Output debugging / log information
+    pass
+
+# ===----------------------------------------------------------------------===
+
+COIN = mpd('100000000')
+FEE_PER_KB = mpd(FLAGS.fee)
+
+from bitcoin.address import BitcoinAddress
+from bitcoin.core import Transaction, Input, Output
+
+for o in route_outputs:
+    t.output
+    t = Transaction(version=2, reference_height=current_height)
+    t.inputs.append(Input(**{
+        'hash':  o.hash,
+        'index': o.index,
+    }))
+    t.outputs.append(Output(**{
+        'amount':   int(o.value * COIN),
+        'contract': BitcoinAddress(route[o.address].decode('base58')
+                    ).destination.script,
+    }))
+    submit_transaction(t)
+
+# ===----------------------------------------------------------------------===
+
 import IPython
 IPython.embed()
