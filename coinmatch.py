@@ -135,7 +135,7 @@ Output = recordtype('Output', ('address', 'amount', 'hash', 'index', 'value', 'a
 outputs = map(
     lambda o:Output(**{
         'address': o[u'address'],
-        'value':   o[u'amount'],
+        'value':   mpd(o[u'amount']),
         'hash':    hash_string_to_integer(o[u'txid']),
         'index':   int(o[u'vout']),
         'amount':  rpc.decoderawtransaction(rpc.getrawtransaction(o[u'txid'])
