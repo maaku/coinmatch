@@ -132,7 +132,7 @@ assert rpc.getinfo()
 
 from recordtype import recordtype
 Output = recordtype('Output', ('address', 'amount', 'hash', 'index', 'value', 'age'))
-outputs = map(
+fund_outputs = map(
     lambda o:Output(**{
         'address': o[u'address'],
         'value':   mpd(o[u'amount']),
@@ -143,7 +143,7 @@ outputs = map(
         'age':     int(o[u'confirmations']),
     }),
     rpc.listunspent(),)
-outputs.sort(key=lambda o:o.age, reverse=True)
+fund_outputs.sort(key=lambda o:o.age, reverse=True)
 
 # ===----------------------------------------------------------------------===
 
@@ -171,8 +171,8 @@ for org_id in early_orgs:
         route[sk.bitcoin_address()] = \
               wallet.subkey_for_path('0/%d' % org_id).bitcoin_address()
 
-route_outputs = filter(lambda o:o.address in route.keys(), outputs)
-outputs = filter(lambda o:o not in route_outputs, outputs)
+route_outputs = filter(lambda o:o.address in route.keys(), fund_outputs)
+fund_outputs = filter(lambda o:o not in route_outputs, fund_outputs)
 
 # ===----------------------------------------------------------------------===
 
@@ -199,18 +199,61 @@ for r in res:
         print 'Added matching address %s for org %d' % (sk.bitcoin_address(), r.id)
     match[sk.bitcoin_address()] = r.address
 
-match_outputs = filter(lambda o:o.address in match.keys(), outputs)
-outputs = filter(lambda o:o not in match_outputs, outputs)
+match_outputs = filter(lambda o:o.address in match.keys(), fund_outputs)
+fund_outputs = filter(lambda o:o not in match_outputs, fund_outputs)
 
 # ===----------------------------------------------------------------------===
 
-def submit_transaction(transaction):
-    # Add fee to transaction
-    # Remove outputs
-    # signed_transaction = signrawtransaction transaction
-    # sendrawtransaction signed_transaction
-    # Output debugging / log information
+class OutOfCoinsError(BaseException):
     pass
+
+def submit_transaction(rpc, inputs, outputs):
+    fee_outputs = 0
+    input_value = sum(map(lambda o:o.value, inputs))
+    output_value = sum(outputs.values()) / COIN
+    while input_value < (output_value + FEE_PER_KB):
+        if fee_outputs == len(fund_outputs):
+            raise OutOfCoinsError(u"ran out of coins to complete transaction")
+        input_value += fund_outputs[fee_outputs].value
+        fee_outputs += 1
+    if fee_outputs and (input_value - output_value) >= 2*FEE_PER_KB:
+        script = BitcoinAddress(
+                fund_outputs[fee_outputs-1].address.decode('base58')
+            ).destination.script
+        outputs.setdefault(script, 0)
+        outputs[script] += int((input_value - output_value - FEE_PER_KB) * COIN)
+    inputs.update(fund_outputs[:fee_outputs])
+
+    t = Transaction(version=2, reference_height=current_height)
+    for o in inputs:
+        t.inputs.append(Input(**{
+            'hash':  o.hash,
+            'index': o.index,
+        }))
+    for contract,amount in six.iteritems(outputs):
+        t.outputs.append(Output(**{
+            'amount':   amount,
+            'contract': contract,
+        }))
+
+    input_value = sum(map(lambda o:o.value, inputs))
+    output_value = sum(outputs.values()) / COIN
+    assert input_value < output_value + 2*FEE_PER_KB
+
+    res = rpc.signrawtransaction(t.serialize().encode('hex'))
+    assert res[u'complete'] is True and u'hex' in res
+    txid = rpc.sendrawtransaction(res[u'hex'])
+
+    print u'Sent transaction %s : %s' % (txid,
+        Transaction.deserialize(StringIO(res[u'hex'].decode('hex'))))
+
+    return txid
+
+# ===----------------------------------------------------------------------===
+
+def has_color(output, color):
+    # FIXME: replace with test for cycling
+    return False
 
 # ===----------------------------------------------------------------------===
 
@@ -221,18 +264,21 @@ from bitcoin.address import BitcoinAddress
 from bitcoin.core import Transaction, Input, Output
 
 for o in route_outputs:
-    t.output
-    t = Transaction(version=2, reference_height=current_height)
-    t.inputs.append(Input(**{
-        'hash':  o.hash,
-        'index': o.index,
-    }))
-    t.outputs.append(Output(**{
-        'amount':   int(o.value * COIN),
-        'contract': BitcoinAddress(route[o.address].decode('base58')
-                    ).destination.script,
-    }))
-    submit_transaction(t)
+    inputs = {o,}
+    outputs = {
+        BitcoinAddress(route[o.address].decode('base58')).destination.script:
+            int(o.value * COIN),}
+    submit_transaction(rpc, inputs, outputs)
+
+for o in match_outputs:
+    out_value = o.value
+    if not has_color(o, o.address):
+        out_value = 11 * out_value / 10
+    inputs = {o,}
+    outputs = {
+        BitcoinAddress(match[o.address].decode('base58')).destination.script:
+            int(out_value * COIN),}
+    submit_transaction(rpc, inputs, outputs)
 
 # ===----------------------------------------------------------------------===
 
