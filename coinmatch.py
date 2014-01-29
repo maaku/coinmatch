@@ -131,9 +131,10 @@ assert rpc.getinfo()
 # ===----------------------------------------------------------------------===
 
 from recordtype import recordtype
-Output = recordtype('Output', ('address', 'amount', 'hash', 'index', 'value', 'age'))
+UnspentOutput = recordtype('UnspentOutput',
+    ('address', 'amount', 'hash', 'index', 'value', 'age'))
 fund_outputs = map(
-    lambda o:Output(**{
+    lambda o:UnspentOutput(**{
         'address': o[u'address'],
         'value':   mpd(o[u'amount']),
         'hash':    hash_string_to_integer(o[u'txid']),
