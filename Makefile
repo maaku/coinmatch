@@ -103,7 +103,7 @@ ${CACHE}/virtualenv/virtualenv-1.10.1.tar.gz:
 ${CACHE}/pyenv-1.10.1-base.tar.gz: ${CACHE}/virtualenv/virtualenv-1.10.1.tar.gz
 	-rm -rf "${PYENV}"
 	mkdir -p "${PYENV}"
-	
+
 	# virtualenv is used to create a separate Python installation
 	# for this project in ${PYENV}.
 	tar \
@@ -116,7 +116,7 @@ ${CACHE}/pyenv-1.10.1-base.tar.gz: ${CACHE}/virtualenv/virtualenv-1.10.1.tar.gz
 	    --prompt="(${APP_NAME}) " \
 	    "${PYENV}"
 	-rm -rf "${CACHE}"/virtualenv/virtualenv-1.10.1
-	
+
 	# Snapshot the Python environment
 	tar -C "${PYENV}" --gzip -cf "$@" .
 	rm -rf "${PYENV}"
@@ -125,11 +125,11 @@ ${CACHE}/pyenv-1.10.1-extras.tar.gz: ${CACHE}/pyenv-1.10.1-base.tar.gz ${ROOT}/r
 	-rm -rf "${PYENV}"
 	mkdir -p "${PYENV}"
 	mkdir -p "${CACHE}"/pypi
-	
+
 	# Uncompress saved Python environment
 	tar -C "${PYENV}" --gzip -xf "${CACHE}"/pyenv-1.10.1-base.tar.gz
 	find "${PYENV}" -not -type d -print0 >"${ROOT}"/.pkglist
-	
+
 	# readline is installed here to get around a bug on Mac OS X
 	# which is causing readline to not build properly if installed
 	# from pip, and the fact that a different package must be used
@@ -139,7 +139,7 @@ ${CACHE}/pyenv-1.10.1-extras.tar.gz: ${CACHE}/pyenv-1.10.1-base.tar.gz ${ROOT}/r
 	else \
 	    "${PYENV}"/bin/easy_install readline; \
 	fi
-	
+
 	# pip is used to install Python dependencies for this project.
 	for reqfile in "${ROOT}"/requirements.txt \
 	               "${CONF}"/requirements*.txt; do \
@@ -149,7 +149,7 @@ ${CACHE}/pyenv-1.10.1-extras.tar.gz: ${CACHE}/pyenv-1.10.1-base.tar.gz ${ROOT}/r
 	        --download-cache="${CACHE}"/pypi \
 	        -r "$$reqfile" || exit 1; \
 	done
-	
+
 	# Snapshot the Python environment
 	cat "${ROOT}"/.pkglist | xargs -0 rm -rf
 	tar -C "${PYENV}" --gzip -cf "$@" .
@@ -161,11 +161,11 @@ python-env: ${PYENV}/.stamp-h
 ${PYENV}/.stamp-h: ${CACHE}/pyenv-1.10.1-base.tar.gz ${CACHE}/pyenv-1.10.1-extras.tar.gz
 	-rm -rf "${PYENV}"
 	mkdir -p "${PYENV}"
-	
+
 	# Uncompress saved Python environment
 	tar -C "${PYENV}" --gzip -xf "${CACHE}"/pyenv-1.10.1-base.tar.gz
 	tar -C "${PYENV}" --gzip -xf "${CACHE}"/pyenv-1.10.1-extras.tar.gz
-	
+
 	# All done!
 	touch "$@"
 
@@ -180,14 +180,14 @@ ${CACHE}/gmp-5.1.3-pkg.tar.gz: ${CACHE}/gmp/gmp-5.1.3.tar.xz
 	    mv "${SYSROOT}" "${SYSROOT}"-bak; \
 	fi
 	mkdir -p "${SYSROOT}"
-	
+
 	rm -rf "${ROOT}"/.build/gmp
 	mkdir -p "${ROOT}"/.build/gmp
 	tar -C "${ROOT}"/.build/gmp --strip-components 1 --xz -xf "$<"
 	bash -c "cd '${ROOT}'/.build/gmp && ./configure --prefix '${SYSROOT}'"
 	bash -c "cd '${ROOT}'/.build/gmp && make all install"
 	rm -rf "${ROOT}"/.build/gmp
-	
+
 	# Snapshot the package
 	tar -C "${SYSROOT}" --gzip -cf "$@" .
 	rm -rf "${SYSROOT}"
@@ -200,10 +200,10 @@ gmp-pkg: ${SYSROOT}/.stamp-gmp-h
 
 ${SYSROOT}/.stamp-gmp-h: ${CACHE}/gmp-5.1.3-pkg.tar.gz
 	mkdir -p "${SYSROOT}"
-	
+
 	# Uncompress the package snapshots
 	tar -C "${SYSROOT}" --gzip -xf "$<"
-	
+
 	# All done!
 	touch "$@"
 
@@ -220,7 +220,7 @@ ${CACHE}/mpfr-3.1.2-pkg.tar.gz: ${CACHE}/mpfr/mpfr-3.1.2.tar.xz ${CACHE}/gmp-5.1
 	mkdir -p "${SYSROOT}"
 	tar -C "${SYSROOT}" --gzip -xf ${CACHE}/gmp-5.1.3-pkg.tar.gz
 	find "${SYSROOT}" -not -type d -print0 >"${ROOT}"/.pkglist
-	
+
 	rm -rf "${ROOT}"/.build/mpfr
 	mkdir -p "${ROOT}"/.build/mpfr
 	tar -C "${ROOT}"/.build/mpfr --strip-components 1 --xz -xf "$<"
@@ -229,7 +229,7 @@ ${CACHE}/mpfr-3.1.2-pkg.tar.gz: ${CACHE}/mpfr/mpfr-3.1.2.tar.xz ${CACHE}/gmp-5.1
 	    --with-gmp='${SYSROOT}'"
 	bash -c "cd '${ROOT}'/.build/mpfr && make all install"
 	rm -rf "${ROOT}"/.build/mpfr
-	
+
 	# Snapshot the package
 	cat "${ROOT}"/.pkglist | xargs -0 rm -rf
 	tar -C "${SYSROOT}" --gzip -cf "$@" .
@@ -244,7 +244,7 @@ mpfr-pkg: ${SYSROOT}/.stamp-mpfr-h
 ${SYSROOT}/.stamp-mpfr-h: ${CACHE}/mpfr-3.1.2-pkg.tar.gz ${SYSROOT}/.stamp-gmp-h
 	# Uncompress the package snapshots
 	tar -C "${SYSROOT}" --gzip -xf "$<"
-	
+
 	# All done!
 	touch "$@"
 
@@ -262,7 +262,7 @@ ${CACHE}/mpc-1.0.1-pkg.tar.gz: ${CACHE}/mpc/mpc-1.0.1.tar.gz ${CACHE}/gmp-5.1.3-
 	tar -C "${SYSROOT}" --gzip -xf ${CACHE}/gmp-5.1.3-pkg.tar.gz
 	tar -C "${SYSROOT}" --gzip -xf ${CACHE}/mpfr-3.1.2-pkg.tar.gz
 	find "${SYSROOT}" -not -type d -print0 >"${ROOT}"/.pkglist
-	
+
 	rm -rf "${ROOT}"/.build/mpc
 	mkdir -p "${ROOT}"/.build/mpc
 	tar -C "${ROOT}"/.build/mpc --strip-components 1 --gzip -xf "$<"
@@ -272,7 +272,7 @@ ${CACHE}/mpc-1.0.1-pkg.tar.gz: ${CACHE}/mpc/mpc-1.0.1.tar.gz ${CACHE}/gmp-5.1.3-
 	    --with-mpfr='${SYSROOT}'"
 	bash -c "cd '${ROOT}'/.build/mpc && make all install"
 	rm -rf "${ROOT}"/.build/mpc
-	
+
 	# Snapshot the package
 	cat "${ROOT}"/.pkglist | xargs -0 rm -rf
 	tar -C "${SYSROOT}" --gzip -cf "$@" .
@@ -287,6 +287,6 @@ mpc-pkg: ${SYSROOT}/.stamp-mpc-h
 ${SYSROOT}/.stamp-mpc-h: ${CACHE}/mpc-1.0.1-pkg.tar.gz ${SYSROOT}/.stamp-gmp-h ${SYSROOT}/.stamp-mpfr-h
 	# Uncompress the package snapshots
 	tar -C "${SYSROOT}" --gzip -xf "$<"
-	
+
 	# All done!
 	touch "$@"
