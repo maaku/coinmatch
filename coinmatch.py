@@ -213,7 +213,7 @@ fund_outputs = filter(lambda o:o not in match_outputs, fund_outputs)
 class OutOfCoinsError(BaseException):
     pass
 
-def submit_transaction(rpc, inputs, outputs):
+def submit_transaction(rpc, inputs, outputs, **kwargs):
     global fund_outputs
     fee_outputs = 0
     input_value = sum(map(lambda o:o.value, inputs))
@@ -231,7 +231,9 @@ def submit_transaction(rpc, inputs, outputs):
         outputs[script] += int((input_value - output_value - FEE_PER_KB) * COIN)
     inputs.update(fund_outputs[:fee_outputs])
 
-    t = Transaction(version=2, reference_height=current_height)
+    kwargs.setdefault('version', 2)
+    kwargs.setdefault('reference_height', current_height)
+    t = Transaction(**kwargs)
     for o in inputs:
         t.inputs.append(Input(**{
             'hash':  o.hash,
