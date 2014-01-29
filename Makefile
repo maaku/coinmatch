@@ -121,7 +121,7 @@ ${CACHE}/pyenv-1.10.1-base.tar.gz: ${CACHE}/virtualenv/virtualenv-1.10.1.tar.gz
 	tar -C "${PYENV}" --gzip -cf "$@" .
 	rm -rf "${PYENV}"
 
-${CACHE}/pyenv-1.10.1-extras.tar.gz: ${CACHE}/pyenv-1.10.1-base.tar.gz ${ROOT}/requirements.txt ${CONF}/requirements*.txt ${SYSROOT}/.stamp-gmp-h ${SYSROOT}/.stamp-mpfr-h ${SYSROOT}/.stamp-mpc-h
+${CACHE}/pyenv-1.10.1-extras.tar.gz: ${CACHE}/pyenv-1.10.1-base.tar.gz ${ROOT}/requirements.txt ${ROOT}/python-bitcoin.patch ${CONF}/requirements*.txt ${SYSROOT}/.stamp-gmp-h ${SYSROOT}/.stamp-mpfr-h ${SYSROOT}/.stamp-mpc-h
 	-rm -rf "${PYENV}"
 	mkdir -p "${PYENV}"
 	mkdir -p "${CACHE}"/pypi
@@ -149,6 +149,9 @@ ${CACHE}/pyenv-1.10.1-extras.tar.gz: ${CACHE}/pyenv-1.10.1-base.tar.gz ${ROOT}/r
 	        --download-cache="${CACHE}"/pypi \
 	        -r "$$reqfile" || exit 1; \
 	done
+
+	# Apply back-ported patches to python-bitcoin
+	patch -p1 <python-bitcoin.patch
 
 	# Snapshot the Python environment
 	cat "${ROOT}"/.pkglist | xargs -0 rm -rf

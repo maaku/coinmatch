@@ -1,0 +1,40 @@
+diff -rupN a/.pyenv/lib/python2.7/site-packages/bitcoin/core.py b/.pyenv/lib/python2.7/site-packages/bitcoin/core.py
+--- a/.pyenv/lib/python2.7/site-packages/bitcoin/core.py
++++ b/.pyenv/lib/python2.7/site-packages/bitcoin/core.py
+@@ -149,9 +149,9 @@ class Transaction(SerializableMixin, Has
+         if outputs is None: outputs = ()
+         super(Transaction, self).__init__(*args, **kwargs)
+         self.version = version
+-        getattr(self, 'inputs_create', lambda:setattr(x, 'inputs', list()))
++        getattr(self, 'inputs_create', lambda:setattr(self, 'inputs', list()))()
+         self.inputs.extend(inputs)
+-        getattr(self, 'outputs_create', lambda:setattr(x, 'outputs', list()))
++        getattr(self, 'outputs_create', lambda:setattr(self, 'outputs', list()))()
+         self.outputs.extend(outputs)
+         self.lock_time = lock_time
+         self.reference_height = reference_height
+diff -rupN a/.pyenv/lib/python2.7/site-packages/bitcoin/rpc.py b/.pyenv/lib/python2.7/site-packages/bitcoin/rpc.py
+--- a/.pyenv/lib/python2.7/site-packages/bitcoin/rpc.py
++++ b/.pyenv/lib/python2.7/site-packages/bitcoin/rpc.py
+@@ -178,7 +178,7 @@ class Proxy(object):
+                 'code'        in response['error'] and response['error']['code']        or -1,
+                 'message'     in response['error'] and response['error']['message']     or '',
+                 'description' in response['error'] and response['error']['description'] or None)
+-        elif 'result' in response and response['result'] is not None:
++        elif 'result' in response:
+             return response['result']
+         else:
+             raise ResponseError(u"server reply must contain one of 'result' or 'error'")
+diff -rupN a/.pyenv/lib/python2.7/site-packages/bitcoin/script.py b/.pyenv/lib/python2.7/site-packages/bitcoin/script.py
+--- a/.pyenv/lib/python2.7/site-packages/bitcoin/script.py
++++ b/.pyenv/lib/python2.7/site-packages/bitcoin/script.py
+@@ -610,6 +610,9 @@ class Script(SerializableMixin, six.bina
+     def deserialize(cls, file_):
+         return cls(deserialize_varchar(file_))
+ 
++    def join(self, *args, **kwargs):
++        return self.__class__(super(Script, self).join(*args, **kwargs))
++
+     def __repr__(self):
+         try:
+             return u"Script([%s])" % ', '.join(map(repr, self))
