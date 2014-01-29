@@ -190,6 +190,11 @@ res = engine.execute('''
            A.validated IS NOT NULL
 ''')
 
+from bitcoin.address import BitcoinAddress
+from bitcoin.base58 import VersionedPayload
+versions = {0: BitcoinAddress.PUBKEY_HASH,
+            5: BitcoinAddress.SCRIPT_HASH}
+
 match = {}
 for r in res:
     sk = wallet.subkey_for_path('0/%d' % r.id)
@@ -197,7 +202,10 @@ for r in res:
     if not ('ismine' in vk and vk['ismine'] is True):
         rpc.importprivkey(sk.wif())
         print 'Added matching address %s for org %d' % (sk.bitcoin_address(), r.id)
-    match[sk.bitcoin_address()] = r.address
+    address = VersionedPayload(r.address.decode('base58'))
+    match[sk.bitcoin_address()] = BitcoinAddress(
+        version = versions[address.version],
+        payload = address.payload).encode('base58')
 
 match_outputs = filter(lambda o:o.address in match.keys(), fund_outputs)
 fund_outputs = filter(lambda o:o not in match_outputs, fund_outputs)
