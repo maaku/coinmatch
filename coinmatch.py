@@ -309,6 +309,7 @@ def has_color(output, color):
 
 COIN = mpd('100000000')
 FEE_PER_KB = mpd(FLAGS.fee)
+MATCH_DELAY = 144 * 30
 
 from bitcoin.address import BitcoinAddress
 from bitcoin.core import Transaction, Input, Output
@@ -328,7 +329,8 @@ for o in match_outputs:
     outputs = {
         BitcoinAddress(match[o.address].decode('base58')).destination.script:
             int(out_value * COIN),}
-    submit_transaction(rpc, inputs, outputs)
+    submit_transaction(rpc, inputs, outputs,
+        lock_time = current_height - o.age + MATCH_DELAY)
 
 # ===----------------------------------------------------------------------===
 
