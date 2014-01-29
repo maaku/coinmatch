@@ -216,6 +216,7 @@ class OutOfCoinsError(BaseException):
     pass
 
 def submit_transaction(rpc, inputs, outputs):
+    global fund_outputs
     fee_outputs = 0
     input_value = sum(map(lambda o:o.value, inputs))
     output_value = sum(outputs.values()) / COIN
