@@ -83,9 +83,6 @@ def _validate_fee(fee):
 gflags.RegisterValidator('fee', _validate_fee,
     message=u"Must provide a decimal fee value.")
 
-#gflags.DEFINE_string('cache_database', u"sqlite:///coinmatch.sqlite",
-#    u"Connection string for cache database")
-
 # ===----------------------------------------------------------------------===
 
 def hash_string_to_integer(string, size=32):
