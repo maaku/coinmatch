@@ -262,8 +262,30 @@ def submit_transaction(rpc, inputs, outputs, **kwargs):
 
 # ===----------------------------------------------------------------------===
 
+from recordtype import recordtype
+OutPoint = recordtype('OutPoint', ('txid', 'n'))
+
 def has_color(output, color):
-    # FIXME: replace with test for cycling
+    txid = hash_integer_to_string(output.hash)
+    res = rpc.getrawtransaction(txid)
+    res = rpc.decoderawtransaction(res)
+    outpoints = set(OutPoint(i['txid'], i['vout']) for i in res['vin'])
+    cycle = False
+    while outpoints:
+        out = outpoints.pop()
+        res = rpc.getrawtransaction(out.txid)
+        res = rpc.decoderawtransaction(res)
+        if 'coinbase' in res['vin'][0]:
+            continue
+        if color in res['vout'][out.n]['scriptPubKey']['addresses']:
+            print('Output %s is cycling coins from %s:%d; exiting' % (
+                repr(output), out.txid, out.n))
+            return True
+        if any(addr in match.keys() for addr in
+               res['vout'][out.n]['scriptPubKey']['addresses']):
+            continue
+        for in_ in res['vin']:
+            outpoints.add(OutPoint(in_['txid'], in_['vout']))
     print('Output %s is cycle-free' % repr(output))
     return False
 
