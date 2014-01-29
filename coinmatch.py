@@ -237,8 +237,9 @@ def submit_transaction(rpc, inputs, outputs, **kwargs):
     t = Transaction(**kwargs)
     for o in inputs:
         t.inputs.append(Input(**{
-            'hash':  o.hash,
-            'index': o.index,
+            'hash':     o.hash,
+            'index':    o.index,
+            'sequence': 0,
         }))
     for contract,amount in six.iteritems(outputs):
         t.outputs.append(Output(**{
