@@ -224,12 +224,21 @@ def submit_transaction(rpc, inputs, outputs, **kwargs):
             raise OutOfCoinsError(u"ran out of coins to complete transaction")
         input_value += fund_outputs[fee_outputs].value
         fee_outputs += 1
+    change_output = None
     if fee_outputs and (input_value - output_value) >= 2*FEE_PER_KB:
-        script = BitcoinAddress(
-                fund_outputs[fee_outputs-1].address.decode('base58')
+        change = input_value - output_value - FEE_PER_KB
+        change_output = UnspentOutput(
+            address = fund_outputs[fee_outputs-1].address,
+            value   = change,
+            hash    = 0, # This isn't known until after tx signing
+            index   = 0xffffffff,
+            amount  = int(change * COIN),
+            age     = 0,)
+        change_script = BitcoinAddress(
+                change_output.address.decode('base58')
             ).destination.script
-        outputs.setdefault(script, 0)
-        outputs[script] += int((input_value - output_value - FEE_PER_KB) * COIN)
+        outputs.setdefault(change_script, 0)
+        outputs[change_script] += change_output.amount
     inputs.update(fund_outputs[:fee_outputs])
 
     kwargs.setdefault('version', 2)
@@ -255,6 +264,12 @@ def submit_transaction(rpc, inputs, outputs, **kwargs):
     assert res[u'complete'] is True and u'hex' in res
     txid = rpc.sendrawtransaction(res[u'hex'])
 
+    fund_outputs = fund_outputs[fee_outputs:]
+    if change_output is not None:
+        change_output.hash  = hash_string_to_integer(txid)
+        change_output.index = t.outputs.index(Output(
+            amount = change_output.amount, contract = change_script))
+        fund_outputs.append(change_output)
 
     print(u'Sent transaction %s: %s' % (txid,
         Transaction.deserialize(StringIO(res[u'hex'].decode('hex')))))
