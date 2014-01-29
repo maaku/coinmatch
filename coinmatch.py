@@ -103,7 +103,7 @@ try:
     import sys
     argv = FLAGS(sys.argv)
 except gflags.FlagsError, e:
-    print '%s\n\nUsage %s ARGS \n%s' % (e, sys.argv[0], FLAGS)
+    print('%s\n\nUsage %s ARGS \n%s' % (e, sys.argv[0], FLAGS))
     sys.exit(0)
 
 if FLAGS.testnet:
@@ -112,7 +112,7 @@ if FLAGS.testnet:
     bitcoin.address.BitcoinAddress.SCRIPT_HASH = 196
 
 else:
-    print '%s is NOT ready for primetime; run with --testnet' % sys.argv[0]
+    print('%s is NOT ready for primetime; run with --testnet' % sys.argv[0])
     sys.exit(1)
 
 # ===----------------------------------------------------------------------===
@@ -164,8 +164,8 @@ for org_id in early_orgs:
         vk = rpc.validateaddress(sk.bitcoin_address())
         if not ('ismine' in vk and vk['ismine'] is True):
             rpc.importprivkey(sk.wif())
-            print 'Added forwarding address %s for org %d, month %d' % (
-                sk.bitcoin_address(), org_id, month_id)
+            print('Added forwarding address %s for org %d, month %d' % (
+                sk.bitcoin_address(), org_id, month_id))
         route[sk.bitcoin_address()] = \
               wallet.subkey_for_path('0/%d' % org_id).bitcoin_address()
 
@@ -199,7 +199,8 @@ for r in res:
     vk = rpc.validateaddress(sk.bitcoin_address())
     if not ('ismine' in vk and vk['ismine'] is True):
         rpc.importprivkey(sk.wif())
-        print 'Added matching address %s for org %d' % (sk.bitcoin_address(), r.id)
+        print('Added matching address %s for org %d' % (
+            sk.bitcoin_address(), r.id))
     address = VersionedPayload(r.address.decode('base58'))
     match[sk.bitcoin_address()] = BitcoinAddress(
         version = versions[address.version],
@@ -253,8 +254,9 @@ def submit_transaction(rpc, inputs, outputs, **kwargs):
     assert res[u'complete'] is True and u'hex' in res
     txid = rpc.sendrawtransaction(res[u'hex'])
 
-    print u'Sent transaction %s : %s' % (txid,
-        Transaction.deserialize(StringIO(res[u'hex'].decode('hex'))))
+
+    print(u'Sent transaction %s: %s' % (txid,
+        Transaction.deserialize(StringIO(res[u'hex'].decode('hex')))))
 
     return txid
 
@@ -262,6 +264,7 @@ def submit_transaction(rpc, inputs, outputs, **kwargs):
 
 def has_color(output, color):
     # FIXME: replace with test for cycling
+    print('Output %s is cycle-free' % repr(output))
     return False
 
 # ===----------------------------------------------------------------------===
@@ -290,6 +293,8 @@ for o in match_outputs:
     submit_transaction(rpc, inputs, outputs)
 
 # ===----------------------------------------------------------------------===
+
+print("All done!")
 
 import IPython
 IPython.embed()
