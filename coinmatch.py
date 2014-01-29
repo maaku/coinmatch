@@ -104,7 +104,7 @@ try:
     argv = FLAGS(sys.argv)
 except gflags.FlagsError, e:
     print '%s\n\nUsage %s ARGS \n%s' % (e, sys.argv[0], FLAGS)
-    sys.exit(1)
+    sys.exit(0)
 
 if FLAGS.testnet:
     import bitcoin.address
@@ -113,7 +113,7 @@ if FLAGS.testnet:
 
 else:
     print '%s is NOT ready for primetime; run with --testnet' % sys.argv[0]
-    sys.exit(0)
+    sys.exit(1)
 
 # ===----------------------------------------------------------------------===
 
