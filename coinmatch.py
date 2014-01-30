@@ -200,7 +200,8 @@ def add_current_addresses(rpc, wallet, foundation_database, debug):
 class OutOfCoinsError(BaseException):
     pass
 
-def submit_transaction(rpc, fund_outputs, current_height, inputs, outputs, **kwargs):
+def submit_transaction(rpc, current_height, inputs, outputs, **kwargs):
+    global fund_outputs
     fee_outputs = 0
     input_value = sum(map(lambda o:o.value, inputs))
     output_value = sum(outputs.values()) / COIN
@@ -330,7 +331,7 @@ for o in route_outputs:
     script = BitcoinAddress(route[o.address].decode('base58')).destination.script
     inputs = {o,}
     outputs = {script: amount,}
-    txid, txhex = submit_transaction(rpc, fund_outputs, current_height, inputs, outputs)
+    txid, txhex = submit_transaction(rpc, current_height, inputs, outputs)
     match_outputs.append(UnspentOutput(**{
         'address': route[o.address],
         'value':   amount / COIN,
@@ -347,7 +348,7 @@ for o in match_outputs:
     outputs = {
         BitcoinAddress(match[o.address].decode('base58')).destination.script:
             int(out_value * COIN),}
-    submit_transaction(rpc, fund_outputs, current_height, inputs, outputs,
+    submit_transaction(rpc, current_height, inputs, outputs,
         lock_time = current_height - o.age + MATCH_DELAY)
 
 # ===----------------------------------------------------------------------===
