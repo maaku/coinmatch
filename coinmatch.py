@@ -164,10 +164,10 @@ def add_old_addresses(rpc, wallet):
 from bitcoin.address import BitcoinAddress
 from bitcoin.base58 import VersionedPayload
 
-def add_current_addresses(rpc, wallet, foundation_database, debug):
-    # SQLAlchemy object-relational mapper
-    from sqlalchemy import *
+# SQLAlchemy object-relational mapper
+from sqlalchemy import *
 
+def add_current_addresses(rpc, wallet, foundation_database, debug):
     engine = create_engine(foundation_database, echo=debug)
 
     res = engine.execute('''
