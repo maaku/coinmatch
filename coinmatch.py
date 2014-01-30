@@ -335,6 +335,3 @@ for o in match_outputs:
 # ===----------------------------------------------------------------------===
 
 print("All done!")
-
-import IPython
-IPython.embed()
