@@ -256,7 +256,7 @@ def submit_transaction(rpc, fund_outputs, current_height, inputs, outputs, **kwa
             amount = change_output.amount, contract = change_script))
         fund_outputs.append(change_output)
 
-    print(u'Sent transaction %s: %s' % res[u'hex'])
+    print(u'Sent transaction %s: %s' % (txid, res[u'hex']))
 
     return txid, res[u'hex']
 
