@@ -245,9 +245,14 @@ def submit_transaction(rpc, fund_outputs, current_height, inputs, outputs, **kwa
     output_value = sum(outputs.values()) / COIN
     assert input_value < output_value + 2*FEE_PER_KB
 
-    res = rpc.signrawtransaction(t.serialize().encode('hex'))
-    assert res[u'complete'] is True and u'hex' in res
-    txid = rpc.sendrawtransaction(res[u'hex'])
+    try:
+        res = rpc.signrawtransaction(t.serialize().encode('hex'))
+        assert res[u'complete'] is True and u'hex' in res
+        txid = rpc.sendrawtransaction(res[u'hex'])
+    except Exception as e:
+        print(e)
+        print('Local environment: %s' % repr(locals()))
+        raise
 
     fund_outputs = fund_outputs[fee_outputs:]
     if change_output is not None:
