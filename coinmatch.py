@@ -258,7 +258,7 @@ def submit_transaction(rpc, fund_outputs, current_height, inputs, outputs, **kwa
 
     print(u'Sent transaction %s: %s' % res[u'hex'])
 
-    return txid
+    return txid, res[u'hex']
 
 from recordtype import recordtype
 OutPoint = recordtype('OutPoint', ('txid', 'n'))
@@ -321,11 +321,18 @@ from bitcoin.address import BitcoinAddress
 from bitcoin.core import Transaction, Input, Output
 
 for o in route_outputs:
+    amount = int(o.value * COIN)
+    script = BitcoinAddress(route[o.address].decode('base58')).destination.script
     inputs = {o,}
-    outputs = {
-        BitcoinAddress(route[o.address].decode('base58')).destination.script:
-            int(o.value * COIN),}
-    submit_transaction(rpc, fund_outputs, current_height, inputs, outputs)
+    outputs = {script: amount,}
+    txid, txhex = submit_transaction(rpc, fund_outputs, current_height, inputs, outputs)
+    match_outputs.append(UnspentOutput(**{
+        'address': route[o.address],
+        'value':   amount / COIN,
+        'hash':    hash_string_to_integer(txid),
+        'index':   Transaction.deserialize(StringIO(txhex.decode('hex'))
+                   ).outputs.index(Output(amount=amount, contract=script)),
+        'age':     0,}))
 
 for o in match_outputs:
     out_value = o.value
