@@ -129,7 +129,7 @@ from recordtype import recordtype
 UnspentOutput = recordtype('UnspentOutput',
     ('address', 'amount', 'hash', 'index', 'value', 'age'))
 
-def get_fund_ourputs(rpc):
+def get_fund_outputs(rpc):
     fund_outputs = map(
         lambda o:UnspentOutput(**{
             'address': o[u'address'],
@@ -161,68 +161,46 @@ def add_old_addresses(rpc, wallet):
                   wallet.subkey_for_path('0/%d' % org_id).bitcoin_address()
     return route
 
-
-# ===----------------------------------------------------------------------===
-
-rpc = get_rpc(FLAGS)
-assert rpc.getinfo()
-
-fund_ourputs = get_fund_ourputs(rpc)
-
-wallet = Wallet.from_wallet_key(FLAGS.rootkey)
-assert wallet.is_private
-
-current_height = rpc.getblockcount()
-
-route = add_old_addresses(rpc, wallet)
-
-route_outputs = filter(lambda o:o.address in route.keys(), fund_outputs)
-fund_outputs = filter(lambda o:o not in route_outputs, fund_outputs)
-
-# ===----------------------------------------------------------------------===
-
-# SQLAlchemy object-relational mapper
-from sqlalchemy import *
-
-engine = create_engine(FLAGS.foundation_database, echo=FLAGS.debug)
-
-res = engine.execute('''
-    SELECT A.id      as id,
-           B.address as address
-    FROM   donations_organization   as A,
-           donations_paymentaddress as B
-    WHERE  A.freicoin_address_id = B.id and
-           A.validated IS NOT NULL
-''')
-
 from bitcoin.address import BitcoinAddress
 from bitcoin.base58 import VersionedPayload
-versions = {0: BitcoinAddress.PUBKEY_HASH,
-            5: BitcoinAddress.SCRIPT_HASH}
 
-match = {}
-for r in res:
-    sk = wallet.subkey_for_path('0/%d' % r.id)
-    vk = rpc.validateaddress(sk.bitcoin_address())
-    if not ('ismine' in vk and vk['ismine'] is True):
-        rpc.importprivkey(sk.wif())
-        print('Added matching address %s for org %d' % (
-            sk.bitcoin_address(), r.id))
-    address = VersionedPayload(r.address.decode('base58'))
-    match[sk.bitcoin_address()] = BitcoinAddress(
-        version = versions[address.version],
-        payload = address.payload).encode('base58')
+def add_current_addresses(rpc, wallet, foundation_database, debug):
+    # SQLAlchemy object-relational mapper
+    from sqlalchemy import *
 
-match_outputs = filter(lambda o:o.address in match.keys(), fund_outputs)
-fund_outputs = filter(lambda o:o not in match_outputs, fund_outputs)
+    engine = create_engine(foundation_database, echo=debug)
 
-# ===----------------------------------------------------------------------===
+    res = engine.execute('''
+        SELECT A.id      as id,
+               B.address as address
+        FROM   donations_organization   as A,
+               donations_paymentaddress as B
+        WHERE  A.freicoin_address_id = B.id and
+               A.validated IS NOT NULL
+    ''')
+
+    versions = {0: BitcoinAddress.PUBKEY_HASH,
+                5: BitcoinAddress.SCRIPT_HASH}
+
+    match = {}
+    for r in res:
+        sk = wallet.subkey_for_path('0/%d' % r.id)
+        vk = rpc.validateaddress(sk.bitcoin_address())
+        if not ('ismine' in vk and vk['ismine'] is True):
+            rpc.importprivkey(sk.wif())
+            print('Added matching address %s for org %d' % (
+                sk.bitcoin_address(), r.id))
+        address = VersionedPayload(r.address.decode('base58'))
+        match[sk.bitcoin_address()] = BitcoinAddress(
+            version = versions[address.version],
+            payload = address.payload).encode('base58')
+
+    return match
 
 class OutOfCoinsError(BaseException):
     pass
 
-def submit_transaction(rpc, inputs, outputs, **kwargs):
-    global fund_outputs
+def submit_transaction(rpc, fund_outputs, current_height, inputs, outputs, **kwargs):
     fee_outputs = 0
     input_value = sum(map(lambda o:o.value, inputs))
     output_value = sum(outputs.values()) / COIN
@@ -283,12 +261,10 @@ def submit_transaction(rpc, inputs, outputs, **kwargs):
 
     return txid
 
-# ===----------------------------------------------------------------------===
-
 from recordtype import recordtype
 OutPoint = recordtype('OutPoint', ('txid', 'n'))
 
-def has_color(output, color):
+def has_color(output, color, match):
     txid = hash_integer_to_string(output.hash)
     res = rpc.getrawtransaction(txid)
     res = rpc.decoderawtransaction(res)
@@ -314,6 +290,28 @@ def has_color(output, color):
 
 # ===----------------------------------------------------------------------===
 
+rpc = get_rpc(FLAGS)
+assert rpc.getinfo()
+
+fund_outputs = get_fund_outputs(rpc)
+
+wallet = Wallet.from_wallet_key(FLAGS.rootkey)
+assert wallet.is_private
+
+current_height = rpc.getblockcount()
+
+route = add_old_addresses(rpc, wallet)
+
+route_outputs = filter(lambda o:o.address in route.keys(), fund_outputs)
+fund_outputs = filter(lambda o:o not in route_outputs, fund_outputs)
+
+match = add_current_addresses(rpc, wallet, FLAGS.foundation_database, FLAGS.debug):
+
+match_outputs = filter(lambda o:o.address in match.keys(), fund_outputs)
+fund_outputs = filter(lambda o:o not in match_outputs, fund_outputs)
+
+# ===----------------------------------------------------------------------===
+
 COIN = mpd('100000000')
 FEE_PER_KB = mpd(FLAGS.fee)
 MATCH_DELAY = 144 * 30
@@ -326,17 +324,17 @@ for o in route_outputs:
     outputs = {
         BitcoinAddress(route[o.address].decode('base58')).destination.script:
             int(o.value * COIN),}
-    submit_transaction(rpc, inputs, outputs)
+    submit_transaction(rpc, fund_outputs, current_height, inputs, outputs)
 
 for o in match_outputs:
     out_value = o.value
-    if not has_color(o, o.address):
+    if not has_color(o, o.address, match):
         out_value = 11 * out_value / 10
     inputs = {o,}
     outputs = {
         BitcoinAddress(match[o.address].decode('base58')).destination.script:
             int(out_value * COIN),}
-    submit_transaction(rpc, inputs, outputs,
+    submit_transaction(rpc, fund_outputs, current_height, inputs, outputs,
         lock_time = current_height - o.age + MATCH_DELAY)
 
 # ===----------------------------------------------------------------------===
