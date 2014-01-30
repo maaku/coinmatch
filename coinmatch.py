@@ -117,57 +117,64 @@ else:
 
 # ===----------------------------------------------------------------------===
 
-kwargs = {}
-kwargs['username'] = FLAGS.username
-kwargs['password'] = FLAGS.password
-kwargs['timeout'] = FLAGS.timeout
-from bitcoin.rpc import Proxy
-rpc = Proxy('http://%s:%d/' % (FLAGS.host, FLAGS.port), **kwargs)
-assert rpc.getinfo()
-
-# ===----------------------------------------------------------------------===
+def get_rpc(flags):
+    kwargs = {}
+    kwargs['username'] = flags.username
+    kwargs['password'] = flags.password
+    kwargs['timeout'] = flags.timeout
+    from bitcoin.rpc import Proxy
+    return Proxy('http://%s:%d/' % (flags.host, flags.port), **kwargs)
 
 from recordtype import recordtype
 UnspentOutput = recordtype('UnspentOutput',
     ('address', 'amount', 'hash', 'index', 'value', 'age'))
-fund_outputs = map(
-    lambda o:UnspentOutput(**{
-        'address': o[u'address'],
-        'value':   mpd(o[u'amount']),
-        'hash':    hash_string_to_integer(o[u'txid']),
-        'index':   int(o[u'vout']),
-        'amount':  rpc.decoderawtransaction(rpc.getrawtransaction(o[u'txid'])
-                   )['vout'][o[u'vout']]['value'],
-        'age':     int(o[u'confirmations']),
-    }),
-    rpc.listunspent(),)
-fund_outputs.sort(key=lambda o:o.age, reverse=True)
+
+def get_fund_ourputs(rpc):
+    fund_outputs = map(
+        lambda o:UnspentOutput(**{
+            'address': o[u'address'],
+            'value':   mpd(o[u'amount']),
+            'hash':    hash_string_to_integer(o[u'txid']),
+            'index':   int(o[u'vout']),
+            'amount':  rpc.decoderawtransaction(rpc.getrawtransaction(o[u'txid'])
+                        )['vout'][o[u'vout']]['value'],
+            'age':     int(o[u'confirmations']),
+        }),
+        rpc.listunspent(),)
+    fund_outputs.sort(key=lambda o:o.age, reverse=True)
+    return fund_outputs
+
+def add_old_addresses(rpc, wallet):
+    months = [1, 2, 3, 4]
+    early_orgs = [13, 14, 15, 16, 17, 19, 20, 21, 22, 23, 24, 25, 26, 27]
+
+    route = {}
+    for org_id in early_orgs:
+        for month_id in months:
+            sk = wallet.subkey_for_path('%d/%d' % (month_id, org_id))
+            vk = rpc.validateaddress(sk.bitcoin_address())
+            if not ('ismine' in vk and vk['ismine'] is True):
+                rpc.importprivkey(sk.wif())
+                print('Added forwarding address %s for org %d, month %d' % (
+                    sk.bitcoin_address(), org_id, month_id))
+            route[sk.bitcoin_address()] = \
+                  wallet.subkey_for_path('0/%d' % org_id).bitcoin_address()
+    return route
+
 
 # ===----------------------------------------------------------------------===
+
+rpc = get_rpc(FLAGS)
+assert rpc.getinfo()
+
+fund_ourputs = get_fund_ourputs(rpc)
 
 wallet = Wallet.from_wallet_key(FLAGS.rootkey)
 assert wallet.is_private
 
-# ===----------------------------------------------------------------------===
-
 current_height = rpc.getblockcount()
 
-# ===----------------------------------------------------------------------===
-
-months = [1, 2, 3, 4]
-early_orgs = [13, 14, 15, 16, 17, 19, 20, 21, 22, 23, 24, 25, 26, 27]
-
-route = {}
-for org_id in early_orgs:
-    for month_id in months:
-        sk = wallet.subkey_for_path('%d/%d' % (month_id, org_id))
-        vk = rpc.validateaddress(sk.bitcoin_address())
-        if not ('ismine' in vk and vk['ismine'] is True):
-            rpc.importprivkey(sk.wif())
-            print('Added forwarding address %s for org %d, month %d' % (
-                sk.bitcoin_address(), org_id, month_id))
-        route[sk.bitcoin_address()] = \
-              wallet.subkey_for_path('0/%d' % org_id).bitcoin_address()
+route = add_old_addresses(rpc, wallet)
 
 route_outputs = filter(lambda o:o.address in route.keys(), fund_outputs)
 fund_outputs = filter(lambda o:o not in route_outputs, fund_outputs)
