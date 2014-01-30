@@ -301,7 +301,7 @@ current_height = rpc.getblockcount()
 
 route = add_old_addresses(rpc, wallet)
 
-match = add_current_addresses(rpc, wallet, FLAGS.foundation_database, FLAGS.debug):
+match = add_current_addresses(rpc, wallet, FLAGS.foundation_database, FLAGS.debug)
 
 # Separate old outputs from funds
 route_outputs = filter(lambda o:o.address in route.keys(), fund_outputs)
