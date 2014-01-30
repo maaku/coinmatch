@@ -332,7 +332,7 @@ for o in route_outputs:
         'hash':    hash_string_to_integer(txid),
         'index':   Transaction.deserialize(StringIO(txhex.decode('hex'))
                    ).outputs.index(Output(amount=amount, contract=script)),
-        'age':     0,}))
+        'age':     o.age,}))
 
 for o in match_outputs:
     out_value = o.value
