@@ -341,6 +341,8 @@ for o in route_outputs:
         'age':     o.age,}))
 
 for o in match_outputs:
+    if o.age < MATCH_DELAY:
+        continue
     out_value = o.value
     if not has_color(o, o.address, match):
         out_value = 11 * out_value / 10
@@ -348,8 +350,7 @@ for o in match_outputs:
     outputs = {
         BitcoinAddress(match[o.address].decode('base58')).destination.script:
             int(out_value * COIN),}
-    submit_transaction(rpc, current_height, inputs, outputs,
-        lock_time = current_height - o.age + MATCH_DELAY)
+    submit_transaction(rpc, current_height, inputs, outputs)
 
 # ===----------------------------------------------------------------------===
 
