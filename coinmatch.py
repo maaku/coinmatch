@@ -146,7 +146,7 @@ def get_fund_outputs(rpc):
 
 def add_old_addresses(rpc, wallet):
     months = [1, 2, 3, 4]
-    early_orgs = [13, 14, 15, 16, 17, 19, 20, 21, 22, 23, 24, 25, 26, 27]
+    early_orgs = [13, 14, 15, 16, 17, 19, 20, 21, 22, 23, 24, 26, 27]
 
     route = {}
     for org_id in early_orgs:
